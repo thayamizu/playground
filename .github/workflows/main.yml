@@ -1,0 +1,83 @@
+name: C++ Performance Testing Pipeline
+
+on:
+  schedule:
+    - cron: '15 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build:
+    name: Performance Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      GITHUB_ACTIONS: 'true'
+      CI: 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Display environment information
+        run: |
+          echo "=== Build Environment ==="
+          echo "Timestamp: $(date --utc '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Runner: ${{ runner.name }} | Architecture: $(uname -m)"
+          echo "CPU: $(nproc) cores | Memory: $(free -h | awk '/^Mem:/ {print $2}')"
+          echo "Disk: $(df -h / | awk 'NR==2 {print $4}') available"
+
+      - name: Setup build environment
+        run: |
+          chmod +x build.sh
+          echo "✓ Build script ready"
+
+      - name: Run performance testing pipeline
+        timeout-minutes: 350
+        run: |
+          set -o pipefail
+          sleep $((RANDOM % 30))
+          ./build.sh 2>&1 | tee build_output.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Verify build artifacts
+        if: always()
+        run: |
+          echo "=== Artifact Verification ==="
+          
+          find /tmp/cpp_build_* -type f \( -name "lib*.so" -o -name "config.json" -o -name "build.log" \) 2>/dev/null | while read file; do
+            echo "✓ Found: $(basename "$file") ($(du -h "$file" | cut -f1))"
+          done
+          
+          [ -f build_output.log ] && echo "✓ Build output: $(wc -l < build_output.log) lines"
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: build-logs
+          path: |
+            build_output.log
+            /tmp/cpp_build_*/build.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/cpp_build_* /tmp/xm_compile_* build_output.log 2>/dev/null
+          echo "✓ Cleanup completed"
+
+      - name: Report status
+        if: always()
+        run: |
+          echo "=== Pipeline Report ==="
+          echo "Status: ${{ job.status }}"
+          echo "Timestamp: $(date --utc '+%Y-%m-%d %H:%M:%S UTC')"
