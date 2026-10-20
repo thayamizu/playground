@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/node": "^13.7.1",
+    "@types/node": "^24.0.0",
     "typescript": "^3.7.5"
   }
 }
